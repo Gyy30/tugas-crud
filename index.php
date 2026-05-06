@@ -52,7 +52,7 @@ $hadir = $conn->query("SELECT COUNT(*) as t FROM tb_absensi $filter status='Hadi
 $izin  = $conn->query("SELECT COUNT(*) as t FROM tb_absensi $filter status='Izin'")->fetch_assoc()['t'];
 $sakit = $conn->query("SELECT COUNT(*) as t FROM tb_absensi $filter status='Sakit'")->fetch_assoc()['t'];
 
-/* ================= DATA CHART (PER TANGGAL) ================= */
+/* ================= CHART ================= */
 $chart = $conn->query("
     SELECT tanggal,
     SUM(status='Hadir') as hadir,
@@ -64,16 +64,12 @@ $chart = $conn->query("
     ORDER BY tanggal ASC
 ");
 
-$tanggal = [];
-$chart_hadir = [];
-$chart_izin = [];
-$chart_sakit = [];
-
-while($c = $chart->fetch_assoc()){
-    $tanggal[] = $c['tanggal'];
-    $chart_hadir[] = $c['hadir'];
-    $chart_izin[] = $c['izin'];
-    $chart_sakit[] = $c['sakit'];
+$tanggal=[]; $chart_hadir=[]; $chart_izin=[]; $chart_sakit=[];
+while($c=$chart->fetch_assoc()){
+    $tanggal[]=$c['tanggal'];
+    $chart_hadir[]=$c['hadir'];
+    $chart_izin[]=$c['izin'];
+    $chart_sakit[]=$c['sakit'];
 }
 ?>
 
@@ -88,28 +84,73 @@ while($c = $chart->fetch_assoc()){
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-body { font-family:'Inter',sans-serif; background:#f1f5f9; }
+body { background:#eef2f7; font-family:'Inter',sans-serif; }
 
+/* SIDEBAR */
 .sidebar{
-width:220px;height:100vh;position:fixed;
-background:#111827;color:white;padding:20px;
+width:230px;height:100vh;position:fixed;
+background:linear-gradient(180deg,#1e293b,#0f172a);
+color:white;padding:20px;
 }
 .sidebar a{
 display:block;color:#cbd5e1;padding:10px;
 border-radius:10px;text-decoration:none;
 }
-.sidebar a:hover{background:#1f2937;color:white}
+.sidebar a:hover{background:#334155;color:white}
 
-.content{margin-left:240px;padding:20px}
+/* CONTENT */
+.content{margin-left:250px;padding:25px}
 
-.card{border:none;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.05)}
+/* CARD */
+.card{
+border:none;border-radius:16px;
+box-shadow:0 8px 25px rgba(0,0,0,0.05)
+}
 
-.stat-card{background:white;padding:12px;border-radius:12px}
-.green{border-left:4px solid #22c55e}
-.yellow{border-left:4px solid #facc15}
-.red{border-left:4px solid #ef4444}
+/* STAT */
+.stat-card{
+padding:18px;border-radius:16px;color:white
+}
+.bg-total{background:linear-gradient(135deg,#6366f1,#4f46e5)}
+.bg-hadir{background:linear-gradient(135deg,#22c55e,#16a34a)}
+.bg-izin{background:linear-gradient(135deg,#facc15,#eab308)}
+.bg-sakit{background:linear-gradient(135deg,#ef4444,#dc2626)}
 
 .table thead{background:#4f46e5;color:white}
+.table tbody tr:hover{background:#eef2ff}
+.btn{border-radius:10px}
+
+/* STATUS GLOW */
+.status {
+padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;
+display:inline-flex;align-items:center;gap:6px;
+}
+.status-hadir {background:#16a34a;color:white;box-shadow:0 0 12px #22c55e;}
+.status-izin {background:#ca8a04;color:white;box-shadow:0 0 12px #facc15;}
+.status-sakit {background:#dc2626;color:white;box-shadow:0 0 12px #ef4444;}
+
+/* 🔥 PREMIUM BUTTON */
+.btn-premium {
+border:none;padding:10px 18px;border-radius:12px;font-weight:600;
+transition:0.25s;backdrop-filter:blur(10px);
+}
+
+.btn-filter {background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;box-shadow:0 4px 15px rgba(37,99,235,0.4);}
+.btn-filter:hover {transform:translateY(-2px);}
+
+.btn-reset {background:#64748b;color:white;}
+.btn-reset:hover {background:#475569;}
+
+.btn-export {background:linear-gradient(135deg,#22c55e,#16a34a);color:white;}
+.btn-export:hover {transform:translateY(-2px);}
+
+.btn-tambah-premium {
+width:100%;padding:12px;border-radius:14px;
+background:linear-gradient(135deg,#16a34a,#15803d);
+color:white;font-weight:600;
+box-shadow:0 6px 20px rgba(22,163,74,0.4);
+}
+.btn-tambah-premium:hover {transform:scale(1.02);}
 </style>
 </head>
 
@@ -125,16 +166,17 @@ border-radius:10px;text-decoration:none;
 <h4 class="mb-4">Dashboard</h4>
 
 <!-- STAT -->
-<div class="row g-3 mb-4">
-<div class="col-md-3"><div class="stat-card"><b>Total:</b> <?= $total ?></div></div>
-<div class="col-md-3"><div class="stat-card green"><b>Hadir:</b> <?= $hadir ?></div></div>
-<div class="col-md-3"><div class="stat-card yellow"><b>Izin:</b> <?= $izin ?></div></div>
-<div class="col-md-3"><div class="stat-card red"><b>Sakit:</b> <?= $sakit ?></div></div>
+<div class="row g-4 mb-4">
+<div class="col-md-3"><div class="stat-card bg-total"><h6>Total</h6><h4><?= $total ?></h4></div></div>
+<div class="col-md-3"><div class="stat-card bg-hadir"><h6>Hadir</h6><h4><?= $hadir ?></h4></div></div>
+<div class="col-md-3"><div class="stat-card bg-izin"><h6>Izin</h6><h4><?= $izin ?></h4></div></div>
+<div class="col-md-3"><div class="stat-card bg-sakit"><h6>Sakit</h6><h4><?= $sakit ?></h4></div></div>
 </div>
 
-<!-- CHART GARIS -->
-<div class="card p-3 mb-4">
-<canvas id="chart"></canvas>
+<!-- CHART -->
+<div class="card p-4 mb-4">
+<h6>Statistik Kehadiran</h6>
+<canvas id="chart" height="100"></canvas>
 </div>
 
 <!-- FILTER -->
@@ -142,27 +184,31 @@ border-radius:10px;text-decoration:none;
 <form method="GET" class="row g-2">
 <input type="date" name="dari" class="form-control col" value="<?= $_GET['dari'] ?? '' ?>">
 <input type="date" name="sampai" class="form-control col" value="<?= $_GET['sampai'] ?? '' ?>">
-<button class="btn btn-primary col">Filter</button>
-<a href="index.php" class="btn btn-secondary col">Reset</a>
-<a href="?export=1&dari=<?= $_GET['dari'] ?? '' ?>&sampai=<?= $_GET['sampai'] ?? '' ?>" class="btn btn-success col">Export</a>
+
+<button class="btn btn-premium btn-filter col">🔍 Filter</button>
+<a href="index.php" class="btn btn-premium btn-reset col">♻ Reset</a>
+<a href="?export=1&dari=<?= $_GET['dari'] ?? '' ?>&sampai=<?= $_GET['sampai'] ?? '' ?>" class="btn btn-premium btn-export col">⬇ Export</a>
 </form>
 </div>
 
 <!-- TABLE -->
 <div class="card p-3">
-<button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalTambah">+ Tambah</button>
+<button class="btn-tambah-premium mb-3" data-bs-toggle="modal" data-bs-target="#modalTambah">➕ Tambah Data</button>
 
 <table class="table text-center">
-<thead>
-<tr><th>Nama</th><th>Kelas</th><th>Status</th><th>Aksi</th></tr>
-</thead>
+<thead><tr><th>Nama</th><th>Kelas</th><th>Status</th><th>Aksi</th></tr></thead>
 <tbody>
 
-<?php while($row=$data->fetch_assoc()){ ?>
+<?php while($row=$data->fetch_assoc()){ 
+$status=$row['status'];
+$class=$status=='Hadir'?'status-hadir':($status=='Izin'?'status-izin':'status-sakit');
+$icon=$status=='Hadir'?'✔':($status=='Izin'?'⚠':'✖');
+?>
+
 <tr>
 <td><?= $row['nama_siswa'] ?></td>
 <td><?= $row['kelas'] ?></td>
-<td><?= $row['status'] ?></td>
+<td><span class="status <?= $class ?>"><?= $icon ?> <?= $status ?></span></td>
 <td>
 <button class="btn btn-primary btn-sm"
 onclick="editData('<?= $row['id'] ?>','<?= $row['nama_siswa'] ?>','<?= $row['kelas'] ?>','<?= $row['tanggal'] ?>','<?= $row['status'] ?>')">Edit</button>
@@ -171,49 +217,13 @@ onclick="editData('<?= $row['id'] ?>','<?= $row['nama_siswa'] ?>','<?= $row['kel
 onclick="hapusData(<?= $row['id'] ?>)">Hapus</button>
 </td>
 </tr>
+
 <?php } ?>
 
 </tbody>
 </table>
 </div>
 
-</div>
-
-<!-- MODAL TAMBAH -->
-<div class="modal fade" id="modalTambah">
-<div class="modal-dialog">
-<form method="POST" class="modal-content p-3">
-<h5>Tambah Data</h5>
-<input type="text" name="nama_siswa" class="form-control mb-2" placeholder="Nama">
-<input type="text" name="kelas" class="form-control mb-2" placeholder="Kelas">
-<input type="date" name="tanggal" class="form-control mb-2">
-<select name="status" class="form-control mb-2">
-<option>Hadir</option>
-<option>Izin</option>
-<option>Sakit</option>
-</select>
-<button name="tambah" class="btn btn-success">Simpan</button>
-</form>
-</div>
-</div>
-
-<!-- MODAL EDIT -->
-<div class="modal fade" id="modalEdit">
-<div class="modal-dialog">
-<form method="POST" class="modal-content p-3">
-<input type="hidden" name="id" id="edit_id">
-<h5>Edit Data</h5>
-<input type="text" name="nama_siswa" id="edit_nama" class="form-control mb-2">
-<input type="text" name="kelas" id="edit_kelas" class="form-control mb-2">
-<input type="date" name="tanggal" id="edit_tanggal" class="form-control mb-2">
-<select name="status" id="edit_status" class="form-control mb-2">
-<option>Hadir</option>
-<option>Izin</option>
-<option>Sakit</option>
-</select>
-<button name="edit" class="btn btn-primary">Update</button>
-</form>
-</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -231,31 +241,20 @@ new bootstrap.Modal(document.getElementById('modalEdit')).show();
 
 // HAPUS
 function hapusData(id){
-Swal.fire({title:'Hapus?',showCancelButton:true}).then(r=>{
-if(r.isConfirmed){
-window.location="hapus.php?id="+id;
-}
+Swal.fire({title:'Hapus data?',showCancelButton:true}).then(r=>{
+if(r.isConfirmed){ window.location="hapus.php?id="+id; }
 });
 }
 
-// LINE CHART
+// CHART
 new Chart(document.getElementById('chart'), {
-type: 'line',
-data: {
+type:'line',
+data:{
 labels: <?= json_encode($tanggal) ?>,
-datasets: [
-{
-label: 'Hadir',
-data: <?= json_encode($chart_hadir) ?>
-},
-{
-label: 'Izin',
-data: <?= json_encode($chart_izin) ?>
-},
-{
-label: 'Sakit',
-data: <?= json_encode($chart_sakit) ?>
-}
+datasets:[
+{label:'Hadir',data:<?= json_encode($chart_hadir) ?>,borderWidth:3,tension:0.4},
+{label:'Izin',data:<?= json_encode($chart_izin) ?>,borderWidth:3,tension:0.4},
+{label:'Sakit',data:<?= json_encode($chart_sakit) ?>,borderWidth:3,tension:0.4}
 ]
 }
 });
