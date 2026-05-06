@@ -1,39 +1,80 @@
 <?php
 require_once 'config/koneksi.php';
 
+/* ================= FILTER ================= */
+$where = "";
+if(isset($_GET['dari']) && isset($_GET['sampai']) && $_GET['dari'] != "" && $_GET['sampai'] != ""){
+    $dari = $_GET['dari'];
+    $sampai = $_GET['sampai'];
+    $where = "WHERE tanggal BETWEEN '$dari' AND '$sampai'";
+}
+
+/* ================= EXPORT ================= */
+if(isset($_GET['export'])){
+    header("Content-type: text/csv");
+    header("Content-Disposition: attachment; filename=data_absensi.csv");
+
+    $output = fopen("php://output", "w");
+    fputcsv($output, ['Nama','Kelas','Tanggal','Status']);
+
+    $export = $conn->query("SELECT * FROM tb_absensi $where");
+    while($row = $export->fetch_assoc()){
+        fputcsv($output, $row);
+    }
+    fclose($output);
+    exit;
+}
+
 /* ================= TAMBAH ================= */
 if (isset($_POST['tambah'])) {
-    $nama = $_POST['nama_siswa'];
-    $kelas = $_POST['kelas'];
-    $tanggal = $_POST['tanggal'];
-    $status = $_POST['status'];
-
     $stmt = $conn->prepare("INSERT INTO tb_absensi (nama_siswa, kelas, tanggal, status) VALUES (?,?,?,?)");
-    $stmt->bind_param("ssss", $nama, $kelas, $tanggal, $status);
+    $stmt->bind_param("ssss", $_POST['nama_siswa'], $_POST['kelas'], $_POST['tanggal'], $_POST['status']);
     $stmt->execute();
-
-    header("Location: ?msg=tambah");
-    exit;
+    header("Location: ?msg=tambah"); exit;
 }
 
 /* ================= EDIT ================= */
 if (isset($_POST['edit'])) {
-    $id = $_POST['id'];
-    $nama = $_POST['nama_siswa'];
-    $kelas = $_POST['kelas'];
-    $tanggal = $_POST['tanggal'];
-    $status = $_POST['status'];
-
     $stmt = $conn->prepare("UPDATE tb_absensi SET nama_siswa=?, kelas=?, tanggal=?, status=? WHERE id=?");
-    $stmt->bind_param("ssssi", $nama, $kelas, $tanggal, $status, $id);
+    $stmt->bind_param("ssssi", $_POST['nama_siswa'], $_POST['kelas'], $_POST['tanggal'], $_POST['status'], $_POST['id']);
     $stmt->execute();
-
-    header("Location: ?msg=edit");
-    exit;
+    header("Location: ?msg=edit"); exit;
 }
 
 /* ================= DATA ================= */
-$result = $conn->query("SELECT * FROM tb_absensi ORDER BY id DESC");
+$data = $conn->query("SELECT * FROM tb_absensi $where ORDER BY id DESC");
+
+/* ================= STATS ================= */
+$filter = $where ? "$where AND" : "WHERE";
+
+$total = $conn->query("SELECT COUNT(*) as t FROM tb_absensi $where")->fetch_assoc()['t'];
+$hadir = $conn->query("SELECT COUNT(*) as t FROM tb_absensi $filter status='Hadir'")->fetch_assoc()['t'];
+$izin  = $conn->query("SELECT COUNT(*) as t FROM tb_absensi $filter status='Izin'")->fetch_assoc()['t'];
+$sakit = $conn->query("SELECT COUNT(*) as t FROM tb_absensi $filter status='Sakit'")->fetch_assoc()['t'];
+
+/* ================= DATA CHART (PER TANGGAL) ================= */
+$chart = $conn->query("
+    SELECT tanggal,
+    SUM(status='Hadir') as hadir,
+    SUM(status='Izin') as izin,
+    SUM(status='Sakit') as sakit
+    FROM tb_absensi
+    $where
+    GROUP BY tanggal
+    ORDER BY tanggal ASC
+");
+
+$tanggal = [];
+$chart_hadir = [];
+$chart_izin = [];
+$chart_sakit = [];
+
+while($c = $chart->fetch_assoc()){
+    $tanggal[] = $c['tanggal'];
+    $chart_hadir[] = $c['hadir'];
+    $chart_izin[] = $c['izin'];
+    $chart_sakit[] = $c['sakit'];
+}
 ?>
 
 <!DOCTYPE html>
@@ -43,72 +84,97 @@ $result = $conn->query("SELECT * FROM tb_absensi ORDER BY id DESC");
 <title>Dashboard Absensi</title>
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-body { background:#f1f5f9; transition:0.3s; }
-.dark-mode { background:#0f172a; color:white; }
-.card { border-radius:15px; }
-.btn { border-radius:25px; }
-.table tbody tr:hover { background:#eef2ff; }
-.dark-mode .table { color:white; }
+body { font-family:'Inter',sans-serif; background:#f1f5f9; }
+
+.sidebar{
+width:220px;height:100vh;position:fixed;
+background:#111827;color:white;padding:20px;
+}
+.sidebar a{
+display:block;color:#cbd5e1;padding:10px;
+border-radius:10px;text-decoration:none;
+}
+.sidebar a:hover{background:#1f2937;color:white}
+
+.content{margin-left:240px;padding:20px}
+
+.card{border:none;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.05)}
+
+.stat-card{background:white;padding:12px;border-radius:12px}
+.green{border-left:4px solid #22c55e}
+.yellow{border-left:4px solid #facc15}
+.red{border-left:4px solid #ef4444}
+
+.table thead{background:#4f46e5;color:white}
 </style>
 </head>
 
 <body>
 
-<div class="container py-4">
+<div class="sidebar">
+<h4>📊 Absensi</h4>
+<a href="#">Dashboard</a>
+</div>
 
-<!-- HEADER -->
-<div class="d-flex justify-content-between mb-3">
-    <h3>📊 Dashboard Absensi</h3>
-    <div>
-        <button class="btn btn-dark" onclick="toggleDark()">🌙</button>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalTambah">+ Tambah</button>
-    </div>
+<div class="content">
+
+<h4 class="mb-4">Dashboard</h4>
+
+<!-- STAT -->
+<div class="row g-3 mb-4">
+<div class="col-md-3"><div class="stat-card"><b>Total:</b> <?= $total ?></div></div>
+<div class="col-md-3"><div class="stat-card green"><b>Hadir:</b> <?= $hadir ?></div></div>
+<div class="col-md-3"><div class="stat-card yellow"><b>Izin:</b> <?= $izin ?></div></div>
+<div class="col-md-3"><div class="stat-card red"><b>Sakit:</b> <?= $sakit ?></div></div>
+</div>
+
+<!-- CHART GARIS -->
+<div class="card p-3 mb-4">
+<canvas id="chart"></canvas>
+</div>
+
+<!-- FILTER -->
+<div class="card p-3 mb-3">
+<form method="GET" class="row g-2">
+<input type="date" name="dari" class="form-control col" value="<?= $_GET['dari'] ?? '' ?>">
+<input type="date" name="sampai" class="form-control col" value="<?= $_GET['sampai'] ?? '' ?>">
+<button class="btn btn-primary col">Filter</button>
+<a href="index.php" class="btn btn-secondary col">Reset</a>
+<a href="?export=1&dari=<?= $_GET['dari'] ?? '' ?>&sampai=<?= $_GET['sampai'] ?? '' ?>" class="btn btn-success col">Export</a>
+</form>
 </div>
 
 <!-- TABLE -->
 <div class="card p-3">
-    <input type="text" id="search" class="form-control mb-3" placeholder="Cari...">
+<button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalTambah">+ Tambah</button>
 
-    <table class="table text-center" id="table">
-        <thead class="table-primary">
-            <tr>
-                <th>No</th>
-                <th>Nama</th>
-                <th>Kelas</th>
-                <th>Tanggal</th>
-                <th>Status</th>
-                <th>Aksi</th>
-            </tr>
-        </thead>
-        <tbody>
+<table class="table text-center">
+<thead>
+<tr><th>Nama</th><th>Kelas</th><th>Status</th><th>Aksi</th></tr>
+</thead>
+<tbody>
 
-        <?php $no=1; while($row=$result->fetch_assoc()){ ?>
-        <tr>
-            <td><?= $no++ ?></td>
-            <td><?= $row['nama_siswa'] ?></td>
-            <td><?= $row['kelas'] ?></td>
-            <td><?= $row['tanggal'] ?></td>
-            <td><?= $row['status'] ?></td>
-            <td>
-                <button class="btn btn-primary btn-sm"
-                    onclick="editData('<?= $row['id'] ?>','<?= $row['nama_siswa'] ?>','<?= $row['kelas'] ?>','<?= $row['tanggal'] ?>','<?= $row['status'] ?>')">
-                    ✏️
-                </button>
+<?php while($row=$data->fetch_assoc()){ ?>
+<tr>
+<td><?= $row['nama_siswa'] ?></td>
+<td><?= $row['kelas'] ?></td>
+<td><?= $row['status'] ?></td>
+<td>
+<button class="btn btn-primary btn-sm"
+onclick="editData('<?= $row['id'] ?>','<?= $row['nama_siswa'] ?>','<?= $row['kelas'] ?>','<?= $row['tanggal'] ?>','<?= $row['status'] ?>')">Edit</button>
 
-                <button class="btn btn-danger btn-sm"
-                    onclick="hapusData(<?= $row['id'] ?>)">
-                    🗑
-                </button>
-            </td>
-        </tr>
-        <?php } ?>
+<button class="btn btn-danger btn-sm"
+onclick="hapusData(<?= $row['id'] ?>)">Hapus</button>
+</td>
+</tr>
+<?php } ?>
 
-        </tbody>
-    </table>
+</tbody>
+</table>
 </div>
 
 </div>
@@ -117,16 +183,16 @@ body { background:#f1f5f9; transition:0.3s; }
 <div class="modal fade" id="modalTambah">
 <div class="modal-dialog">
 <form method="POST" class="modal-content p-3">
-    <h5>Tambah Data</h5>
-    <input type="text" name="nama_siswa" class="form-control mb-2" placeholder="Nama" required>
-    <input type="text" name="kelas" class="form-control mb-2" placeholder="Kelas" required>
-    <input type="date" name="tanggal" class="form-control mb-2" required>
-    <select name="status" class="form-control mb-2">
-        <option>Hadir</option>
-        <option>Izin</option>
-        <option>Sakit</option>
-    </select>
-    <button name="tambah" class="btn btn-success">Simpan</button>
+<h5>Tambah Data</h5>
+<input type="text" name="nama_siswa" class="form-control mb-2" placeholder="Nama">
+<input type="text" name="kelas" class="form-control mb-2" placeholder="Kelas">
+<input type="date" name="tanggal" class="form-control mb-2">
+<select name="status" class="form-control mb-2">
+<option>Hadir</option>
+<option>Izin</option>
+<option>Sakit</option>
+</select>
+<button name="tambah" class="btn btn-success">Simpan</button>
 </form>
 </div>
 </div>
@@ -135,17 +201,17 @@ body { background:#f1f5f9; transition:0.3s; }
 <div class="modal fade" id="modalEdit">
 <div class="modal-dialog">
 <form method="POST" class="modal-content p-3">
-    <input type="hidden" name="id" id="edit_id">
-    <h5>Edit Data</h5>
-    <input type="text" name="nama_siswa" id="edit_nama" class="form-control mb-2">
-    <input type="text" name="kelas" id="edit_kelas" class="form-control mb-2">
-    <input type="date" name="tanggal" id="edit_tanggal" class="form-control mb-2">
-    <select name="status" id="edit_status" class="form-control mb-2">
-        <option>Hadir</option>
-        <option>Izin</option>
-        <option>Sakit</option>
-    </select>
-    <button name="edit" class="btn btn-primary">Update</button>
+<input type="hidden" name="id" id="edit_id">
+<h5>Edit Data</h5>
+<input type="text" name="nama_siswa" id="edit_nama" class="form-control mb-2">
+<input type="text" name="kelas" id="edit_kelas" class="form-control mb-2">
+<input type="date" name="tanggal" id="edit_tanggal" class="form-control mb-2">
+<select name="status" id="edit_status" class="form-control mb-2">
+<option>Hadir</option>
+<option>Izin</option>
+<option>Sakit</option>
+</select>
+<button name="edit" class="btn btn-primary">Update</button>
 </form>
 </div>
 </div>
@@ -153,65 +219,52 @@ body { background:#f1f5f9; transition:0.3s; }
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-// DARK MODE
-function toggleDark(){
-    document.body.classList.toggle("dark-mode");
-}
-
-// EDIT MODAL
+// EDIT
 function editData(id,nama,kelas,tanggal,status){
-    document.getElementById("edit_id").value = id;
-    document.getElementById("edit_nama").value = nama;
-    document.getElementById("edit_kelas").value = kelas;
-    document.getElementById("edit_tanggal").value = tanggal;
-    document.getElementById("edit_status").value = status;
-
-    new bootstrap.Modal(document.getElementById('modalEdit')).show();
+edit_id.value=id;
+edit_nama.value=nama;
+edit_kelas.value=kelas;
+edit_tanggal.value=tanggal;
+edit_status.value=status;
+new bootstrap.Modal(document.getElementById('modalEdit')).show();
 }
 
 // HAPUS
 function hapusData(id){
-    Swal.fire({
-        title:'Yakin hapus?',
-        text:'Data tidak bisa dikembalikan!',
-        icon:'warning',
-        showCancelButton:true
-    }).then((result)=>{
-        if(result.isConfirmed){
-            window.location.href = "hapus.php?id=" + id;
-        }
-    });
+Swal.fire({title:'Hapus?',showCancelButton:true}).then(r=>{
+if(r.isConfirmed){
+window.location="hapus.php?id="+id;
+}
+});
 }
 
-// 🔍 SEARCH
-document.getElementById("search").addEventListener("keyup", function(){
-    let val = this.value.toLowerCase();
-    document.querySelectorAll("#table tbody tr").forEach(row=>{
-        row.style.display = row.innerText.toLowerCase().includes(val) ? "" : "none";
-    });
+// LINE CHART
+new Chart(document.getElementById('chart'), {
+type: 'line',
+data: {
+labels: <?= json_encode($tanggal) ?>,
+datasets: [
+{
+label: 'Hadir',
+data: <?= json_encode($chart_hadir) ?>
+},
+{
+label: 'Izin',
+data: <?= json_encode($chart_izin) ?>
+},
+{
+label: 'Sakit',
+data: <?= json_encode($chart_sakit) ?>
+}
+]
+}
 });
 
-// 🔥 NOTIF SEKALI (FIX REFRESH)
-const url = new URL(window.location);
-const msg = url.searchParams.get('msg');
-
+// NOTIF
+const msg=new URLSearchParams(window.location.search).get('msg');
 if(msg){
-    let text = '';
-
-    if(msg === 'tambah') text = 'Data berhasil ditambah';
-    if(msg === 'edit') text = 'Data berhasil diupdate';
-    if(msg === 'hapus') text = 'Data berhasil dihapus';
-
-    Swal.fire({
-        icon:'success',
-        title:'Berhasil!',
-        text:text,
-        timer:1500,
-        showConfirmButton:false
-    });
-
-    // hapus parameter dari URL
-    window.history.replaceState({}, document.title, window.location.pathname);
+Swal.fire({icon:'success',title:'Berhasil',timer:1200,showConfirmButton:false});
+history.replaceState({},'',location.pathname);
 }
 </script>
 
