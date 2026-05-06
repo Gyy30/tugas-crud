@@ -1,7 +1,31 @@
 <?php
 require_once 'config/koneksi.php';
 
+// Ambil ID dari URL
 $id = $_GET['id'];
+
+// Kalau tombol submit ditekan
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $nama   = $_POST['nama_siswa'];
+    $kelas  = $_POST['kelas'];
+    $tanggal= $_POST['tanggal'];
+    $status = $_POST['status'];
+
+    // Query update
+    $stmt = $conn->prepare("UPDATE tb_absensi SET nama_siswa=?, kelas=?, tanggal=?, status=? WHERE id=?");
+    $stmt->bind_param("ssssi", $nama, $kelas, $tanggal, $status, $id);
+
+    if ($stmt->execute()) {
+        echo "<script>
+                alert('Data berhasil diupdate!');
+                window.location='index.php';
+              </script>";
+    } else {
+        echo "Gagal update data!";
+    }
+}
+
+// Ambil data lama
 $stmt = $conn->prepare("SELECT * FROM tb_absensi WHERE id = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
